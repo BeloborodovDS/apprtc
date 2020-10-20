@@ -21,25 +21,17 @@ var remoteVideo = $('#remote-video');
 var UI_CONSTANTS = {
   confirmJoinButton: '#confirm-join-button',
   confirmJoinDiv: '#confirm-join-div',
-  confirmJoinRoomSpan: '#confirm-join-room-span',
   fullscreenSvg: '#fullscreen',
   hangupSvg: '#hangup',
   icons: '#icons',
   infoDiv: '#info-div',
-  newRoomButton: '#new-room-button',
-  newRoomLink: '#new-room-link',
-  privacyLinks: '#privacy',
   remoteVideo: '#remote-video',
   rejoinButton: '#rejoin-button',
   rejoinDiv: '#rejoin-div',
-  rejoinLink: '#rejoin-link',
-  roomLinkHref: '#room-link-href',
   roomSelectionDiv: '#room-selection',
   roomSelectionInput: '#room-id-input',
   roomSelectionInputLabel: '#room-id-input-label',
   roomSelectionJoinButton: '#join-button',
-  roomSelectionRandomButton: '#random-button',
-  roomSelectionRecentList: '#recent-rooms-list',
   sharingDiv: '#sharing-div',
   statusDiv: '#status-div',
   turnInfoDiv: '#turn-info-div',
@@ -58,12 +50,8 @@ var AppController = function(loadingParams) {
   this.turnInfoDiv_ = $(UI_CONSTANTS.turnInfoDiv);
   this.remoteVideo_ = $(UI_CONSTANTS.remoteVideo);
   this.videosDiv_ = $(UI_CONSTANTS.videosDiv);
-  this.roomLinkHref_ = $(UI_CONSTANTS.roomLinkHref);
   this.rejoinDiv_ = $(UI_CONSTANTS.rejoinDiv);
-  this.rejoinLink_ = $(UI_CONSTANTS.rejoinLink);
-  this.newRoomLink_ = $(UI_CONSTANTS.newRoomLink);
   this.rejoinButton_ = $(UI_CONSTANTS.rejoinButton);
-  this.newRoomButton_ = $(UI_CONSTANTS.newRoomButton);
 
   this.fullscreenIconSet_ =
       new AppController.IconSet_(UI_CONSTANTS.fullscreenSvg);
@@ -81,8 +69,6 @@ var AppController = function(loadingParams) {
       }.bind(this));
     }
 
-    this.newRoomButton_.addEventListener('click',
-        this.onNewRoomClick_.bind(this), false);
     this.rejoinButton_.addEventListener('click',
         this.onRejoinClick_.bind(this), false);
 
@@ -96,20 +82,11 @@ var AppController = function(loadingParams) {
       this.createCall_();
 
       // Ask the user to confirm.
-      if (!RoomSelection.matchRandomRoomPattern(this.loadingParams_.roomId)) {
-        // Show the room name only if it does not match the random room pattern.
-        $(UI_CONSTANTS.confirmJoinRoomSpan).textContent = ' "' +
-            this.loadingParams_.roomId + '"';
-      }
       var confirmJoinDiv = $(UI_CONSTANTS.confirmJoinDiv);
       this.show_(confirmJoinDiv);
 
       $(UI_CONSTANTS.confirmJoinButton).onclick = function() {
         this.hide_(confirmJoinDiv);
-
-        // Record this room in the recently used list.
-        var recentlyUsedList = new RoomSelection.RecentlyUsedList();
-        recentlyUsedList.pushRecentRoom(this.loadingParams_.roomId);
         this.finishCallSetup_(this.loadingParams_.roomId);
       }.bind(this);
 
@@ -126,8 +103,6 @@ var AppController = function(loadingParams) {
 };
 
 AppController.prototype.createCall_ = function() {
-  var privacyLinks = $(UI_CONSTANTS.privacyLinks);
-  this.hide_(privacyLinks);
   this.call_ = new Call(this.loadingParams_);
   this.infoBox_ = new InfoBox($(UI_CONSTANTS.infoDiv), this.call_,
       this.loadingParams_.versionInfo);
@@ -325,14 +300,7 @@ AppController.prototype.onRejoinClick_ = function() {
   this.setupUi_();
 };
 
-AppController.prototype.onNewRoomClick_ = function() {
-  this.deactivate_(this.rejoinDiv_);
-  this.hide_(this.rejoinDiv_);
-  this.showRoomSelection_();
-};
-
 // Spacebar, or m: toggle audio mute.
-// c: toggle camera(video) mute.
 // f: toggle fullscreen.
 // i: toggle info panel.
 // q: quit (hangup)
@@ -359,8 +327,6 @@ AppController.prototype.pushCallNavigation_ = function(roomId, roomLink) {
 };
 
 AppController.prototype.displaySharingInfo_ = function(roomId, roomLink) {
-  this.roomLinkHref_.href = roomLink;
-  this.roomLinkHref_.text = roomLink;
   this.roomLink_ = roomLink;
   this.pushCallNavigation_(roomId, roomLink);
   this.activate_(this.sharingDiv_);
