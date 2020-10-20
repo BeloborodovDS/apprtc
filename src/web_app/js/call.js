@@ -24,7 +24,6 @@ var Call = function(params) {
   this.channel_.onmessage = this.onRecvSignalingChannelMessage_.bind(this);
 
   this.pcClient_ = null;
-  this.localStream_ = null;
   this.errorMessageQueue_ = [];
   this.startTime = null;
 
@@ -32,7 +31,6 @@ var Call = function(params) {
   this.oncallerstarted = null;
   this.onerror = null;
   this.oniceconnectionstatechange = null;
-  this.onlocalstreamadded = null;
   this.onnewicecandidate = null;
   this.onremotehangup = null;
   this.onremotesdpset = null;
@@ -46,7 +44,6 @@ var Call = function(params) {
 };
 
 Call.prototype.requestMediaAndIceServers_ = function() {
-  this.getMediaPromise_ = this.maybeGetMedia_();
   this.getIceServersPromise_ = this.maybeGetIceServers_();
 };
 
@@ -63,25 +60,12 @@ Call.prototype.start = function(roomId) {
 
 Call.prototype.restart = function() {
   // Reinitialize the promises so the media gets hooked up as a result
-  // of calling maybeGetMedia_.
   this.requestMediaAndIceServers_();
   this.start(this.params_.previousRoomId);
 };
 
 Call.prototype.hangup = function(async) {
   this.startTime = null;
-
-  if (this.localStream_) {
-    if (typeof this.localStream_.getTracks === 'undefined') {
-      // Support legacy browsers, like phantomJs we use to run tests.
-      this.localStream_.stop();
-    } else {
-      this.localStream_.getTracks().forEach(function(track) {
-        track.stop();
-      });
-    }
-    this.localStream_ = null;
-  }
 
   if (!this.params_.roomId) {
     return;
@@ -200,34 +184,6 @@ Call.prototype.getPeerConnectionStats = function(callback) {
   this.pcClient_.getPeerConnectionStats(callback);
 };
 
-Call.prototype.toggleVideoMute = function() {
-  var videoTracks = this.localStream_.getVideoTracks();
-  if (videoTracks.length === 0) {
-    trace('No local video available.');
-    return;
-  }
-
-  trace('Toggling video mute state.');
-  for (var i = 0; i < videoTracks.length; ++i) {
-    videoTracks[i].enabled = !videoTracks[i].enabled;
-  }
-  trace('Video ' + (videoTracks[0].enabled ? 'unmuted.' : 'muted.'));
-};
-
-Call.prototype.toggleAudioMute = function() {
-  var audioTracks = this.localStream_.getAudioTracks();
-  if (audioTracks.length === 0) {
-    trace('No local audio available.');
-    return;
-  }
-
-  trace('Toggling audio mute state.');
-  for (var i = 0; i < audioTracks.length; ++i) {
-    audioTracks[i].enabled = !audioTracks[i].enabled;
-  }
-  trace('Audio ' + (audioTracks[0].enabled ? 'unmuted.' : 'muted.'));
-};
-
 // Connects client to the room. This happens by simultaneously requesting
 // media, requesting turn, and join the room. Once all three of those
 // tasks is complete, the signaling process begins. At the same time, a
@@ -281,51 +237,6 @@ Call.prototype.connectToRoom_ = function(roomId) {
   }.bind(this));
 };
 
-// Asynchronously request user media if needed.
-Call.prototype.maybeGetMedia_ = function() {
-  // mediaConstraints.audio and mediaConstraints.video could be objects, so
-  // check '!=== false' instead of '=== true'.
-  var needStream = (this.params_.mediaConstraints.audio !== false ||
-                    this.params_.mediaConstraints.video !== false);
-  var mediaPromise = null;
-  if (needStream) {
-    var mediaConstraints = this.params_.mediaConstraints;
-
-    mediaPromise = navigator.mediaDevices.getUserMedia(mediaConstraints)
-        .catch(function(error) {
-          if (error.name !== 'NotFoundError') {
-            throw error;
-          }
-          return navigator.mediaDevices.enumerateDevices()
-              .then(function(devices) {
-                var cam = devices.find(function(device) {
-                  return device.kind === 'videoinput';
-                });
-                var mic = devices.find(function(device) {
-                  return device.kind === 'audioinput';
-                });
-                var constraints = {
-                  video: cam && mediaConstraints.video,
-                  audio: mic && mediaConstraints.audio
-                };
-                return navigator.mediaDevices.getUserMedia(constraints);
-              });
-        })
-        .then(function(stream) {
-          trace('Got access to local media with mediaConstraints:\n' +
-          '  \'' + JSON.stringify(mediaConstraints) + '\'');
-
-          this.onUserMediaSuccess_(stream);
-        }.bind(this)).catch(function(error) {
-          this.onError_('Error getting user media: ' + error.message);
-          this.onUserMediaError_(error);
-        }.bind(this));
-  } else {
-    mediaPromise = Promise.resolve();
-  }
-  return mediaPromise;
-};
-
 // Asynchronously request an ICE server if needed.
 Call.prototype.maybeGetIceServers_ = function() {
   var shouldRequestIceServers =
@@ -349,11 +260,7 @@ Call.prototype.maybeGetIceServers_ = function() {
             var subject =
                 encodeURIComponent('AppRTC demo ICE servers not working');
             this.onturnstatusmessage(
-                'No TURN server; unlikely that media will traverse networks. ' +
-                'If this persists please ' +
-                '<a href="mailto:discuss-webrtc@googlegroups.com?' +
-                'subject=' + subject + '">' +
-                'report it to discuss-webrtc@googlegroups.com</a>.');
+                'No TURN server; unlikely that media will traverse networks.');
           }
           trace(error.message);
         }.bind(this));
@@ -361,21 +268,6 @@ Call.prototype.maybeGetIceServers_ = function() {
     iceServerPromise = Promise.resolve();
   }
   return iceServerPromise;
-};
-
-Call.prototype.onUserMediaSuccess_ = function(stream) {
-  this.localStream_ = stream;
-  if (this.onlocalstreamadded) {
-    this.onlocalstreamadded(stream);
-  }
-};
-
-Call.prototype.onUserMediaError_ = function(error) {
-  var errorMessage = 'Failed to get access to local media. Error name was ' +
-      error.name + '. Continuing without sending a stream.';
-  this.onError_('getUserMedia error: ' + errorMessage);
-  this.errorMessageQueue_.push(error);
-  alert(errorMessage);
 };
 
 Call.prototype.maybeCreatePcClientAsync_ = function() {
@@ -428,10 +320,6 @@ Call.prototype.startSignaling_ = function() {
 
   this.maybeCreatePcClientAsync_()
       .then(function() {
-        if (this.localStream_) {
-          trace('Adding local stream.');
-          this.pcClient_.addStream(this.localStream_);
-        }
         if (this.params_.isInitiator) {
           this.pcClient_.startAsCaller(this.params_.offerOptions);
         } else {

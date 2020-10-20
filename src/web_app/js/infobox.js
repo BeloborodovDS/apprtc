@@ -17,7 +17,6 @@
 var InfoBox = function(infoDiv, call, versionInfo) {
   this.infoDiv_ = infoDiv;
   this.remoteVideo_ = document.getElementById('remote-video');
-  this.localVideo_ = document.getElementById('mini-video');
   this.call_ = call;
   this.versionInfo_ = versionInfo;
 
@@ -29,10 +28,6 @@ var InfoBox = function(infoDiv, call, versionInfo) {
   this.stats_ = null;
   this.prevStats_ = null;
   this.getStatsTimer_ = null;
-  this.localTrackIds_ = {
-    video: '',
-    audio: ''
-  };
   this.remoteTrackIds_ = {
     video: '',
     audio: ''
@@ -44,29 +39,11 @@ var InfoBox = function(infoDiv, call, versionInfo) {
     Remote: {}
   };
 
-  // Used to calculate FPS for the video element.
-  this.localDecodedFrames_ = 0;
-  this.localStartTime_ = 0;
-  this.localVideo_.addEventListener('playing', function(event) {
-    this.localDecodedFrames_ = event.target.webkitDecodedFrameCount;
-    this.localStartTime_ = new Date().getTime();
-  }.bind(this));
-
   this.remoteDecodedFrames_ = 0;
   this.remoteStartTime_ = 0;
   this.remoteVideo_.addEventListener('playing', function(event) {
     this.remoteDecodedFrames_ = event.target.webkitDecodedFrameCount;
     this.remoteStartTime_ = new Date().getTime();
-  }.bind(this));
-};
-
-InfoBox.prototype.getLocalTrackIds = function(stream) {
-  stream.getTracks().forEach(function(track) {
-    if (track.kind === 'audio') {
-      this.localTrackIds_.audio = track.id;
-    } else if (track.kind === 'video') {
-      this.localTrackIds_.video = track.id;
-    }
   }.bind(this));
 };
 
@@ -152,8 +129,7 @@ InfoBox.prototype.updateInfoDiv = function() {
       }
       contents += this.buildLine_(endpoint, types.join(' '));
     }
-    var statReport = enumerateStats(this.stats_, this.localTrackIds_,
-        this.remoteTrackIds_);
+    var statReport = enumerateStats(this.stats_, this.remoteTrackIds_);
 
     var connectionStats = statReport.connection;
     var localAddr;
@@ -219,10 +195,8 @@ InfoBox.prototype.updateInfoDiv = function() {
 
 InfoBox.prototype.buildStatsSection_ = function() {
   var contents = this.buildLine_('Stats');
-  var statReport = enumerateStats(this.stats_, this.localTrackIds_,
-      this.remoteTrackIds_);
-  var prevStatReport = enumerateStats(this.prevStats_, this.localTrackIds_,
-      this.remoteTrackIds_);
+  var statReport = enumerateStats(this.stats_, this.remoteTrackIds_);
+  var prevStatReport = enumerateStats(this.prevStats_, this.remoteTrackIds_);
 
   // Obtain setup and latency this.stats_.
   var totalRtt = statReport.connection.totalRoundTripTime * 1000;
@@ -243,10 +217,6 @@ InfoBox.prototype.buildStatsSection_ = function() {
   var rxPrevAudio = prevStatReport.audio.remote;
   var rxPrevVideo = prevStatReport.video.remote;
   var rxVideo = statReport.video.remote;
-  var txAudio = statReport.audio.local;
-  var txPrevAudio = prevStatReport.audio.local;
-  var txPrevVideo = prevStatReport.video.local;
-  var txVideo = statReport.video.local;
 
   var rxAudioBitrate;
   var rxAudioClockRate;
@@ -266,36 +236,6 @@ InfoBox.prototype.buildStatsSection_ = function() {
   var rxVideoPliCount;
   var rxVideoPlType;
 
-  var txAudioBitrate;
-  var txAudioClockRate;
-  var txAudioCodec;
-  var txAudioLevel;
-  var txAudioPacketRate;
-  var txAudioPlType;
-  var txVideoBitrate;
-  var txVideoCodec;
-  var txVideoFirCount;
-  var txVideoFps;
-  var txVideoHeight;
-  var txVideoNackCount;
-  var txVideoPacketRate;
-  var txVideoPliCount;
-  var txVideoPlType;
-
-  if (txAudio.codecId !== '' && txAudio.payloadType !== 0) {
-    txAudioCodec = txAudio.mimeType;
-    txAudioLevel = parseFloat(txAudio.audioLevel).toFixed(3);
-    txAudioClockRate = txAudio.clockRate;
-    txAudioPlType = txAudio.payloadType;
-    txAudioBitrate = computeBitrate(txAudio, txPrevAudio, 'bytesSent');
-    txAudioPacketRate = computeRate(txAudio, txPrevAudio, 'packetsSent');
-    contents += this.buildLine_(
-        'Audio Tx', txAudioCodec + '/' + txAudioPlType + ', ' +
-        'rate ' + txAudioClockRate + ', ' +
-        InfoBox.formatBitrate_(txAudioBitrate) + ', ' +
-        InfoBox.formatPacketRate_(txAudioPacketRate) + ', inputLevel ' +
-        txAudioLevel);
-  }
   if (rxAudio.codecId !== '' && rxAudio.payloadType !== 0) {
     rxAudioCodec = rxAudio.mimeType;
     rxAudioLevel = parseFloat(rxAudio.audioLevel).toFixed(3);
@@ -312,29 +252,8 @@ InfoBox.prototype.buildStatsSection_ = function() {
         InfoBox.formatPacketRate_(rxAudioPacketRate) + ', outputLevel ' +
         rxAudioLevel);
   }
-  if (txVideo.codecId !== '' && txVideo.payloadType !== 0 &&
-      txVideo.frameHeight !== 0) {
-    txVideoCodec = txVideo.mimeType;
-    txVideoHeight = txVideo.frameHeight;
-    txVideoPlType = txVideo.payloadType;
-    txVideoPliCount = txVideo.pliCount;
-    txVideoFirCount = txVideo.firCount;
-    txVideoNackCount = txVideo.nackCount;
-    txVideoFps = calculateFps(this.remoteVideo_, this.remoteDecodedFrames_,
-        this.remoteStartTime_, 'local', this.updateDecodedFramesCallback_);
-    txVideoBitrate = computeBitrate(txVideo, txPrevVideo, 'bytesSent');
-    txVideoPacketRate = computeRate(txVideo, txPrevVideo, 'packetsSent');
-    contents += this.buildLine_('Video Tx',
-        txVideoCodec + '/' + txVideoPlType + ', ' + txVideoHeight.toString() +
-        'p' + txVideoFps.toString() + ', ' +
-        'firCount ' + txVideoFirCount + ', ' +
-        'pliCount ' + txVideoPliCount + ', ' +
-        'nackCount ' + txVideoNackCount + ', ' +
-        InfoBox.formatBitrate_(txVideoBitrate) + ', ' +
-        InfoBox.formatPacketRate_(txVideoPacketRate));
-  }
   if (rxVideo.codecId !== '' && rxVideo.payloadType !== 0 &&
-      txVideo.frameHeight !== 0) {
+      rxVideo.frameHeight !== 0) {
     rxVideoCodec = rxVideo.mimeType;
     rxVideoHeight = rxVideo.frameHeight;
     rxVideoPlType = rxVideo.payloadType;
@@ -362,10 +281,7 @@ InfoBox.prototype.buildStatsSection_ = function() {
 // Callback that sets used to keep track for calculating FPS for video elements.
 InfoBox.prototype.updateDecodedFramesCallback_ = function(
   decodedFrames_, startTime_, remoteOrLocal) {
-  if (remoteOrLocal === 'local') {
-    this.localDecodedFrames_ = decodedFrames_;
-    this.localStartTime_ = startTime_;
-  } else if (remoteOrLocal === 'remote') {
+  if (remoteOrLocal === 'remote') {
     this.remoteDecodedFrames_ = decodedFrames_;
     this.remoteStartTime_ = startTime_;
   }
