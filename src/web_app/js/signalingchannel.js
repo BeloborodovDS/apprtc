@@ -15,6 +15,8 @@
 
 // This class implements a signaling channel based on WebSocket.
 var SignalingChannel = function(wssUrl, wssPostUrl) {
+  trace(wssUrl)
+  trace(wssPostUrl)
   this.wssUrl_ = wssUrl;
   this.wssPostUrl_ = wssPostUrl;
   this.roomId_ = null;
