@@ -306,18 +306,20 @@ AppController.prototype.onRejoinClick_ = function() {
 // q: quit (hangup)
 // Return false to screen out original Chrome shortcuts.
 AppController.prototype.onKeyPress_ = function(event) {
-  switch (String.fromCharCode(event.charCode)) {
+  var key = String.fromCharCode(event.charCode);
+  trace(key)
+  switch (key) {
     case 'f':
       this.toggleFullScreen_();
       return false;
     case 'i':
       this.infoBox_.toggleInfoDiv();
       return false;
-    case 'q':
-      this.hangup_();
-      return false;
     default:
-      return;
+      if (this.call_ && this.call_.pcClient_ && this.call_.pcClient_.dc_) {
+        this.call_.pcClient_.dc_.send(key);
+      }
+      return false;
   }
 };
 

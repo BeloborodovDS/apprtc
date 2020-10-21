@@ -13,7 +13,7 @@ from aiortc import (
     RTCSessionDescription,
     VideoStreamTrack,
 )
-from aiortc.contrib.media import MediaBlackhole, MediaPlayer, MediaRecorder
+from aiortc.contrib.media import MediaBlackhole, MediaPlayer
 from aiortc.contrib.signaling import BYE, ApprtcSignaling
 
 ROOT = os.path.dirname(__file__)
@@ -45,7 +45,7 @@ class VideoImageTrack(VideoStreamTrack):
         return frame
 
 
-async def run(pc, player, recorder, signaling):
+async def run(pc, player, signaling):
     def add_tracks():
         if player and player.audio:
             pc.addTrack(player.audio)
@@ -58,13 +58,30 @@ async def run(pc, player, recorder, signaling):
     @pc.on("track")
     def on_track(track):
         print("Track %s received" % track.kind)
-        recorder.addTrack(track)
+
+    channel = pc.createDataChannel("control", maxRetransmits=0, ordered=False)
+
+    @channel.on("open")
+    def on_open():
+        print('Data channel open')
+
+    @channel.on("message")
+    def on_message(message):
+        if isinstance(message, str):
+            print(message)
+        else:
+            print('Not string ', str(message))
+
+    @channel.on("close")
+    def on_close():
+        print('Data channel closed')
 
     # connect to websocket and join
     params = await signaling.connect()
 
     if params["is_initiator"] == "true":
         # send offer
+        print('I am the initiator')
         add_tracks()
         await pc.setLocalDescription(await pc.createOffer())
         await signaling.send(pc.localDescription)
@@ -75,7 +92,6 @@ async def run(pc, player, recorder, signaling):
 
         if isinstance(obj, RTCSessionDescription):
             await pc.setRemoteDescription(obj)
-            await recorder.start()
 
             if obj.type == "offer":
                 # send answer
@@ -85,7 +101,7 @@ async def run(pc, player, recorder, signaling):
         elif isinstance(obj, RTCIceCandidate):
             await pc.addIceCandidate(obj)
         elif obj is BYE:
-            print("Exiting")
+            print("BYE")
             break
 
 
@@ -93,7 +109,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="AppRTC")
     parser.add_argument("room", nargs="?")
     parser.add_argument("--play-from", help="Read the media from a file and sent it."),
-    parser.add_argument("--record-to", help="Write received media to a file."),
     parser.add_argument("--verbose", "-v", action="count")
     args = parser.parse_args()
 
@@ -114,22 +129,15 @@ if __name__ == "__main__":
     else:
         player = None
 
-    # create media sink
-    if args.record_to:
-        recorder = MediaRecorder(args.record_to)
-    else:
-        recorder = MediaBlackhole()
-
     # run event loop
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(
-            run(pc=pc, player=player, recorder=recorder, signaling=signaling)
+            run(pc=pc, player=player, signaling=signaling)
         )
     except KeyboardInterrupt:
         pass
     finally:
         # cleanup
-        loop.run_until_complete(recorder.stop())
         loop.run_until_complete(signaling.close())
         loop.run_until_complete(pc.close())

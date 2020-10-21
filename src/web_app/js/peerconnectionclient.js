@@ -37,6 +37,21 @@ var PeerConnectionClient = function(params, startTime) {
   this.pc_ = new RTCPeerConnection(
       params.peerConnectionConfig, params.peerConnectionConstraints);
   this.pc_.onicecandidate = this.onIceCandidate_.bind(this);
+  
+  this.dc_ = null;
+  this.pc_.ondatachannel = function(event) {
+    this.dc_ = event.channel;
+    this.dc_.onopen = function() {
+      trace('Data channel open');
+    };
+    this.dc_.onclose = function() {
+      trace('Data channel closed')
+    };
+    this.dc_.onmessage = function(event) {
+      trace(event.data);
+    };
+  }.bind(this);
+
   this.pc_.ontrack = this.onRemoteStreamAdded_.bind(this);
   this.pc_.onremovestream = trace.bind(null, 'Remote stream removed.');
   this.pc_.onsignalingstatechange = this.onSignalingStateChanged_.bind(this);
@@ -155,6 +170,11 @@ PeerConnectionClient.prototype.receiveSignalingMessage = function(message) {
 };
 
 PeerConnectionClient.prototype.close = function() {
+  if (this.dc_) {
+    this.dc_.close();
+    this.dc_ = null;
+  }
+
   if (!this.pc_) {
     return;
   }
