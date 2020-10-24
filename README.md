@@ -1,5 +1,23 @@
 [![Build Status](https://travis-ci.org/webrtc/apprtc.svg?branch=master)](https://travis-ci.org/webrtc/apprtc)
 
+On code change:
+```
+grunt build
+```
+
+Run server locally:
+```
+dev_appserver.py --host 0.0.0.0 --enable_host_checking false ./out/app_engine
+```
+
+Run python client:
+```
+conda activate yanao
+python apprtc.py 12345
+```
+
+Navigate to the link provided by python client.
+
 # AppRTC Demo Code
 
 ## Development
