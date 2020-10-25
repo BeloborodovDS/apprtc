@@ -43,6 +43,30 @@ class VideoImageTrack(VideoStreamTrack):
         frame.time_base = time_base
 
         return frame
+    
+class PiCameraTrack(VideoStreamTrack):
+    def __init__(self):
+        super().__init__()
+        from picamera.array import PiRGBArray
+        from picamera import PiCamera
+        
+        self.camera = PiCamera()
+        self.rawCapture = PiRGBArray(self.camera)
+
+    async def recv(self):
+        pts, time_base = await self.next_timestamp()
+
+        self.camera.capture(self.rawCapture, format="bgr")
+        img = self.rawCapture.array
+
+        # create video frame
+        frame = VideoFrame.from_ndarray(img, format="bgr24")
+        frame.pts = pts
+        frame.time_base = time_base
+        
+        self.rawCapture.truncate(0)
+
+        return frame
 
 
 async def run(pc, player, signaling):
@@ -53,7 +77,11 @@ async def run(pc, player, signaling):
         if player and player.video:
             pc.addTrack(player.video)
         else:
-            pc.addTrack(VideoImageTrack())
+            try:
+                pc.addTrack(PiCameraTrack())
+            except:
+                print("Cannot open picamera")
+                pc.addTrack(VideoImageTrack())
 
     @pc.on("track")
     def on_track(track):
