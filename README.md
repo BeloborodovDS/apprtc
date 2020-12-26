@@ -1,5 +1,11 @@
 [![Build Status](https://travis-ci.org/webrtc/apprtc.svg?branch=master)](https://travis-ci.org/webrtc/apprtc)
 
+TODO:
+
+https://github.com/aiortc/aiortc/issues/104
+
+https://www.linux-projects.org/uv4l/webrtc-extension/
+
 On code change:
 ```
 grunt build
